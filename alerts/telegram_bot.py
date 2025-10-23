@@ -1,5 +1,5 @@
 """
-Telegram Alert System for Paper Trading.
+Telegram Alert System for Trading.
 
 Sends notifications for:
 - Entry signals
@@ -7,6 +7,7 @@ Sends notifications for:
 - Stop loss hits
 - Daily performance summaries
 - System errors
+- Risk limit alerts
 """
 
 import os
@@ -273,13 +274,15 @@ class TelegramBot:
 
     # ========== System Alerts ==========
 
-    def alert_system_start(self, config: dict = None):
+    def alert_system_start(self, config: dict = None, mode: str = "DEMO", exchange: str = "Bybit"):
         """Alert when system starts."""
+        mode_emoji = "🟡" if mode.upper() == "DEMO" else "🔴"
+
         message = f"""
 🤖 <b>SYSTEM STARTED</b>
 
-<b>Mode:</b> Paper Trading
-<b>Exchange:</b> Bybit Testnet
+<b>Mode:</b> {mode_emoji} {mode.upper()}
+<b>Exchange:</b> {exchange}
 
 {self._format_config(config) if config else ''}
 

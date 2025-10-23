@@ -570,12 +570,16 @@ class TradingSystem:
 
         # Send Telegram notification
         if self.telegram:
-            self.telegram.alert_system_start({
-                "Mode": config.TRADING_MODE.value.upper(),
-                "Capital": f"${config.risk.initial_capital:,.2f}",
-                "Max Positions": config.risk.max_positions,
-                "Position Size": f"{config.risk.risk_per_trade_pct*100}%"
-            })
+            exchange_name = "Bybit Demo" if config.TRADING_MODE == TradingMode.DEMO else "Bybit Live"
+            self.telegram.alert_system_start(
+                config={
+                    "Capital": f"${self.capital:,.2f}",  # Use actual capital (from exchange or config)
+                    "Max Positions": config.risk.max_positions,
+                    "Position Size": f"{config.risk.risk_per_trade_pct*100}%"
+                },
+                mode=config.TRADING_MODE.value,
+                exchange=exchange_name
+            )
 
         self.running = True
         print("✓ System started. Press Ctrl+C to stop\n")

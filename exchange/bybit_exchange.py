@@ -44,7 +44,7 @@ class BybitExchange:
         self.api_key = api_key
         self.api_secret = api_secret
         self.base_url = base_url
-        self.recv_window = 5000
+        self.recv_window = 20000  # Increased to handle clock skew (system time issue)
 
         self.session = requests.Session()
 
