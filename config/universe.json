@@ -1,0 +1,136 @@
+{
+  "metadata": {
+    "created_at": "2025-10-06T23:41:13.585936",
+    "selection_criteria": {
+      "required_days": 90,
+      "min_volume_usd": 10000000,
+      "num_assets": 20,
+      "include_btc": false
+    },
+    "total_assets": 20,
+    "trading_assets": 20,
+    "regime_assets": 0
+  },
+  "assets": [
+    {
+      "symbol": "DOGEUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 672985136.6742692,
+      "days_available": 395
+    },
+    {
+      "symbol": "ENAUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 200276915.79836804,
+      "days_available": 395
+    },
+    {
+      "symbol": "1000PEPEUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 181190542.21974543,
+      "days_available": 396
+    },
+    {
+      "symbol": "FARTCOINUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 180271288.05013198,
+      "days_available": 285
+    },
+    {
+      "symbol": "ADAUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 175683756.7448182,
+      "days_available": 396
+    },
+    {
+      "symbol": "AVAXUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 167357961.19469202,
+      "days_available": 395
+    },
+    {
+      "symbol": "HIFIUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 93639812.5331,
+      "days_available": 395
+    },
+    {
+      "symbol": "ARBUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 66887616.20509453,
+      "days_available": 395
+    },
+    {
+      "symbol": "1000BONKUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 65364893.80103636,
+      "days_available": 396
+    },
+    {
+      "symbol": "BAKEUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 53926175.534562886,
+      "days_available": 395
+    },
+    {
+      "symbol": "DOTUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 48483064.68688521,
+      "days_available": 395
+    },
+    {
+      "symbol": "HBARUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 38580578.653763846,
+      "days_available": 395
+    },
+    {
+      "symbol": "EIGENUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 38369194.55645999,
+      "days_available": 395
+    },
+    {
+      "symbol": "CRVUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 37924541.063840404,
+      "days_available": 395
+    },
+    {
+      "symbol": "ATHUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 33590327.391854554,
+      "days_available": 395
+    },
+    {
+      "symbol": "GALAUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 26619259.2783808,
+      "days_available": 395
+    },
+    {
+      "symbol": "AI16ZUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 25743023.348245453,
+      "days_available": 261
+    },
+    {
+      "symbol": "BIOUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 25444937.6584948,
+      "days_available": 279
+    },
+    {
+      "symbol": "DRIFTUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 25422372.878647998,
+      "days_available": 395
+    },
+    {
+      "symbol": "APTUSDT",
+      "role": "trading",
+      "avg_daily_volume_usd": 23592420.098287277,
+      "days_available": 395
+    }
+  ]
+}
