@@ -26,6 +26,7 @@ from config.trading_config import config, TradingMode
 from exchange.bybit_exchange import BybitExchange
 from alerts.telegram_bot import TelegramBot
 from database.trade_database import TradeDatabase
+from integration.alpha_integration import get_integration
 from signals.entry_signals import generate_entry_signals
 from signals.exit_signals import check_exit_signal
 from signals.btc_regime_filter import check_btc_regime
@@ -121,6 +122,10 @@ class TradingSystem:
         if config.database.enabled:
             print("Connecting to database...")
             self.db = TradeDatabase(config.database.db_path)
+
+            # Alpha infrastructure integration
+            self.alpha_integration = get_integration(bot_id='momentum_001')
+            print(f"Alpha integration status: {'✅ Connected' if self.alpha_integration.is_connected() else '⚠️ Not connected'}")
             print("✓ Database connected")
         else:
             self.db = None
@@ -374,6 +379,19 @@ class TradingSystem:
                     signal_strength=signal['signal_strength']
                 )
 
+            # 🔥 ALPHA INTEGRATION: Also log to PostgreSQL/Redis
+            if hasattr(self, 'alpha_integration') and self.alpha_integration.is_connected():
+                self.alpha_integration.log_trade_entry(
+                    trade_id=trade_id,
+                    symbol=symbol,
+                    side="Buy",
+                    entry_price=price,
+                    quantity=quantity,
+                    position_size_usd=position_size,
+                    stop_loss=initial_stop_loss,
+                    signal_strength=signal['signal_strength']
+                )
+
             # Send alert
             if self.telegram:
                 self.telegram.alert_position_opened(
@@ -481,6 +499,20 @@ class TradingSystem:
                 self.db.log_trade_exit(
                     trade_id=position['trade_id'],
                     exit_price=exit_price,
+                    pnl_usd=pnl_usd,
+                    pnl_pct=pnl_pct,
+                    exit_reason=exit_reason,
+                    holding_time_seconds=int(holding_time)
+                )
+
+            # 🔥 ALPHA INTEGRATION: Also log exit to PostgreSQL/Redis
+            if hasattr(self, 'alpha_integration') and self.alpha_integration.is_connected():
+                self.alpha_integration.log_trade_exit(
+                    trade_id=position['trade_id'],
+                    symbol=symbol,
+                    side="Buy",  # Original entry side
+                    exit_price=exit_price,
+                    quantity=position['quantity'],
                     pnl_usd=pnl_usd,
                     pnl_pct=pnl_pct,
                     exit_reason=exit_reason,
