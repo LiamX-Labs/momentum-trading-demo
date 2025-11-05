@@ -8,6 +8,9 @@ pybit>=5.6.0
 
 # Database
 # sqlite3 is built-in to Python
+# Alpha infrastructure integration
+psycopg2-binary>=2.9.0
+redis>=5.0.0
 
 # Testing (optional)
 pytest>=7.4.0
