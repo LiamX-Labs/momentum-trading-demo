@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Optional
 
 # Add shared library to path
-alpha_root = Path(__file__).parent.parent.parent.parent
+alpha_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(alpha_root))
 
 from shared.alpha_db_client import AlphaDBClient, create_client_order_id
@@ -22,8 +22,6 @@ logger = logging.getLogger(__name__)
 class MomentumAlphaIntegration:
     """
     Integration layer between Momentum strategy and Alpha infrastructure.
-
-    Replaces local SQLite database with centralized PostgreSQL + Redis.
 
     Responsibilities:
     - Write all fills to PostgreSQL (trading.fills)
@@ -47,11 +45,13 @@ class MomentumAlphaIntegration:
         """Initialize database client with retry logic."""
         try:
             # Momentum uses Redis DB 2 (per integration spec)
-            self.db_client = AlphaDBClient(bot_id=self.bot_id, redis_db=2)
+            self.db_client = AlphaDBClient(bot_id=self.bot_id, redis_db=1)
             logger.info(f"✅ Alpha infrastructure integration initialized for {self.bot_id}")
+            print(f"✅ Alpha infrastructure integration initialized for {self.bot_id}")
         except Exception as e:
             logger.error(f"❌ Failed to initialize Alpha integration: {e}")
-            logger.warning("⚠️ Strategy will continue without database integration")
+            print(f"⚠️ Alpha integration failed: {e}")
+            print("⚠️ Strategy will continue without database integration")
             self.db_client = None
 
     def is_connected(self) -> bool:
@@ -59,161 +59,250 @@ class MomentumAlphaIntegration:
         return self.db_client is not None
 
     # ========================================
-    # TRADE LOGGING (Replaces SQLite)
+    # TRADE TRACKING (Integrates with trade_tracker)
     # ========================================
 
-    def log_trade_entry(
+    def log_trade_opened(
         self,
-        trade_id: str,
         symbol: str,
         side: str,
         entry_price: float,
-        quantity: float,
-        position_size_usd: float,
-        stop_loss: float = None,
-        take_profit: float = None,
-        signal_strength: float = None
+        position_size: float,
+        rule_id: str,
+        entry_timestamp: datetime = None
     ) -> bool:
         """
-        Log trade entry to PostgreSQL (replaces SQLite log_trade_entry).
+        Log trade entry to PostgreSQL (called when trade opens).
 
         Args:
-            trade_id: Unique trade identifier
-            symbol: Trading pair
+            symbol: Trading pair (e.g., 'BTCUSDT')
             side: 'Buy' or 'Sell'
             entry_price: Entry price
-            quantity: Position quantity
-            position_size_usd: Position value in USD
-            stop_loss: Stop loss price
-            take_profit: Take profit price
-            signal_strength: Signal strength (0-1)
+            position_size: Position quantity
+            rule_id: Trading rule identifier
+            entry_timestamp: Entry time (defaults to now)
 
         Returns:
             True if successful
         """
         if not self.db_client:
-            logger.debug("Database integration not available, skipping trade entry logging")
             return False
 
         try:
+            if entry_timestamp is None:
+                entry_timestamp = datetime.utcnow()
+
+            # Create trade ID from rule and timestamp
+            trade_id = f"{self.bot_id}_{symbol}_{rule_id}_{int(entry_timestamp.timestamp())}"
+
+            # Capitalize side for PostgreSQL constraint (Buy/Sell not buy/sell)
+            side_capitalized = side.capitalize() if side else side
+
             # Record entry fill
-            self.db_client.write_fill(
+            fill_id = self.db_client.write_fill(
                 symbol=symbol,
-                side=side,
+                side=side_capitalized,
                 exec_price=entry_price,
-                exec_qty=quantity,
+                exec_qty=position_size,
                 order_id=trade_id,
                 client_order_id=create_client_order_id(self.bot_id, 'entry'),
                 close_reason='entry',
                 commission=0.0,  # Will be updated from actual order
-                exec_time=datetime.utcnow()
+                exec_time=entry_timestamp
             )
 
-            # Update position in Redis
-            self.db_client.update_position_redis(
+            # 🔥 NEW: Create position entry for proper position tracking
+            self.db_client.create_position_entry(
                 symbol=symbol,
-                size=quantity,
-                side=side,
-                avg_price=entry_price,
-                unrealized_pnl=0.0
+                entry_price=entry_price,
+                quantity=position_size,
+                entry_time=entry_timestamp,
+                entry_order_id=trade_id,
+                entry_fill_id=fill_id,
+                commission=0.0
             )
 
-            logger.info(f"📊 Trade entry logged: {symbol} {side} {quantity} @ {entry_price}")
+            # Get current position summary (weighted average across all entries)
+            position = self.db_client.get_current_position_summary(symbol)
+            if position:
+                # Update Redis with weighted average price
+                self.db_client.update_position_redis(
+                    symbol=symbol,
+                    size=float(position['total_qty']),
+                    side=side_capitalized,
+                    avg_price=float(position['avg_entry_price']),
+                    unrealized_pnl=0.0
+                )
+                logger.info(f"📊 Trade entry logged: {symbol} {side} {position_size} @ {entry_price} (rule: {rule_id}), weighted avg: ${float(position['avg_entry_price']):.4f}")
+            else:
+                # Fallback if position summary fails
+                self.db_client.update_position_redis(
+                    symbol=symbol,
+                    size=position_size,
+                    side=side_capitalized,
+                    avg_price=entry_price,
+                    unrealized_pnl=0.0
+                )
+                logger.info(f"📊 Trade entry logged: {symbol} {side} {position_size} @ {entry_price} (rule: {rule_id})")
+
             return True
 
         except Exception as e:
             logger.error(f"❌ Failed to log trade entry: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
-    def log_trade_exit(
+    def log_trade_closed(
         self,
-        trade_id: str,
         symbol: str,
         side: str,
         exit_price: float,
-        quantity: float,
-        pnl_usd: float,
-        pnl_pct: float,
-        exit_reason: str,
-        holding_time_seconds: int
+        position_size: float,
+        pnl: float,
+        reason: str,
+        rule_id: str = None
     ) -> bool:
         """
-        Log trade exit to PostgreSQL (replaces SQLite log_trade_exit).
+        Log trade exit to PostgreSQL (called when trade closes).
 
         Args:
-            trade_id: Trade identifier
             symbol: Trading pair
-            side: Original side ('Buy' or 'Sell')
+            side: Original entry side ('Buy' or 'Sell')
             exit_price: Exit price
-            quantity: Position quantity
-            pnl_usd: Profit/loss in USD
-            pnl_pct: Profit/loss percentage
-            exit_reason: Why position closed
-            holding_time_seconds: How long position was held
+            position_size: Position quantity
+            pnl: Profit/loss in USD
+            reason: Close reason ('take_profit', 'stop_loss', 'trailing_stop', 'manual', etc.)
+            rule_id: Trading rule identifier (optional)
 
         Returns:
             True if successful
         """
         if not self.db_client:
-            logger.debug("Database integration not available, skipping trade exit logging")
             return False
 
         try:
             # Determine exit side (opposite of entry)
             exit_side = 'Sell' if side == 'Buy' else 'Buy'
 
+            # Create trade ID
+            trade_id = f"{self.bot_id}_{symbol}_exit_{int(datetime.utcnow().timestamp())}"
+            exit_time = datetime.utcnow()
+
             # Record exit fill
             self.db_client.write_fill(
                 symbol=symbol,
                 side=exit_side,
                 exec_price=exit_price,
-                exec_qty=quantity,
-                order_id=f"{trade_id}_exit",
-                client_order_id=create_client_order_id(self.bot_id, exit_reason),
-                close_reason=exit_reason,
+                exec_qty=position_size,
+                order_id=trade_id,
+                client_order_id=create_client_order_id(self.bot_id, reason),
+                close_reason=reason,
                 commission=0.0,  # Will be updated from actual order
-                exec_time=datetime.utcnow()
+                exec_time=exit_time
             )
 
-            # Update position to flat in Redis
-            self.db_client.update_position_redis(
+            # 🔥 NEW: Close position using FIFO matching
+            completed_trades = self.db_client.close_position_fifo(
                 symbol=symbol,
-                size=0.0,
-                side='None',
-                avg_price=0.0,
-                unrealized_pnl=0.0
+                exit_price=exit_price,
+                close_qty=position_size,
+                exit_time=exit_time,
+                exit_reason=reason,
+                exit_commission=0.0
             )
 
-            logger.info(f"📊 Trade exit logged: {symbol} PnL: ${pnl_usd:.2f} ({pnl_pct:.2f}%) - {exit_reason}")
+            # Log completed trades
+            total_pnl = sum(t['net_pnl'] for t in completed_trades)
+            logger.info(f"📊 Trade exit logged: {symbol} closed {len(completed_trades)} entries, Total P&L: ${total_pnl:+.2f} - {reason}")
+
+            # Check remaining position
+            position = self.db_client.get_current_position_summary(symbol)
+            if position and float(position['total_qty']) > 0:
+                # Partial close - update Redis with remaining position
+                self.db_client.update_position_redis(
+                    symbol=symbol,
+                    size=float(position['total_qty']),
+                    side=side,
+                    avg_price=float(position['avg_entry_price']),
+                    unrealized_pnl=0.0
+                )
+                logger.info(f"📊 Partial close: {float(position['total_qty'])} remaining @ ${float(position['avg_entry_price']):.4f}")
+            else:
+                # Full close - update position to flat in Redis
+                self.db_client.update_position_redis(
+                    symbol=symbol,
+                    size=0.0,
+                    side='None',
+                    avg_price=0.0,
+                    unrealized_pnl=0.0
+                )
+
             return True
 
         except Exception as e:
             logger.error(f"❌ Failed to log trade exit: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     # ========================================
     # POSITION MANAGEMENT
     # ========================================
 
-    def get_open_trades(self) -> list:
+    def update_position(
+        self,
+        symbol: str,
+        size: float,
+        side: str = None,
+        avg_price: float = None,
+        unrealized_pnl: float = None
+    ):
         """
-        Get open trades from Redis (replaces SQLite get_open_trades).
+        Update position state in Redis.
 
-        Returns:
-            List of open position dicts
+        Args:
+            symbol: Trading pair
+            size: Position size (0 = flat)
+            side: 'Buy' (long), 'Sell' (short), or None
+            avg_price: Average entry price
+            unrealized_pnl: Current unrealized P&L
         """
         if not self.db_client:
-            return []
+            return
 
         try:
-            # Get all position keys for this bot
-            # Note: This requires adding a helper method to AlphaDBClient
-            # For now, return empty list - the strategy should track positions internally
-            return []
+            self.db_client.update_position_redis(
+                symbol=symbol,
+                size=size,
+                side=side,
+                avg_price=avg_price,
+                unrealized_pnl=unrealized_pnl
+            )
+
+            logger.debug(f"📊 Redis position updated: {symbol} = {size}")
 
         except Exception as e:
-            logger.error(f"❌ Failed to get open trades: {e}")
-            return []
+            logger.error(f"❌ Failed to update Redis position: {e}")
+
+    def get_position(self, symbol: str) -> Optional[Dict]:
+        """
+        Get current position from Redis.
+
+        Args:
+            symbol: Trading pair
+
+        Returns:
+            Position dict or None
+        """
+        if not self.db_client:
+            return None
+
+        try:
+            return self.db_client.get_position_redis(symbol)
+        except Exception as e:
+            logger.error(f"❌ Failed to get Redis position: {e}")
+            return None
 
     # ========================================
     # HEARTBEAT & STATUS
@@ -245,56 +334,25 @@ class MomentumAlphaIntegration:
     # PERFORMANCE QUERIES
     # ========================================
 
-    def get_performance_stats(self, days: int = 30) -> Dict:
-        """
-        Get performance statistics (replaces SQLite get_performance_stats).
-
-        Args:
-            days: Number of days to analyze
-
-        Returns:
-            Performance statistics dict
-        """
+    def get_daily_pnl(self, days: int = 1) -> float:
+        """Get P&L for last N days."""
         if not self.db_client:
-            return {
-                'total_trades': 0,
-                'wins': 0,
-                'losses': 0,
-                'win_rate': 0.0,
-                'total_pnl': 0.0,
-                'avg_pnl_pct': 0.0
-            }
+            return 0.0
 
         try:
-            pnl = self.db_client.get_daily_pnl(days)
-            trade_count = self.db_client.get_trade_count_today()
+            return self.db_client.get_daily_pnl(days)
+        except:
+            return 0.0
 
-            return {
-                'total_trades': trade_count,
-                'total_pnl': pnl,
-                'wins': 0,  # Need to calculate from fills
-                'losses': 0,
-                'win_rate': 0.0,
-                'avg_pnl_pct': 0.0
-            }
+    def get_trade_count_today(self) -> int:
+        """Get number of trades today."""
+        if not self.db_client:
+            return 0
 
-        except Exception as e:
-            logger.error(f"❌ Failed to get performance stats: {e}")
-            return {}
-
-    # ========================================
-    # SYSTEM EVENTS
-    # ========================================
-
-    def log_event(self, event_type: str, level: str, message: str, details: Dict = None):
-        """
-        Log system event (replaces SQLite log_event).
-
-        For now, just logs to Python logger.
-        Could be extended to write to PostgreSQL audit.system_events table.
-        """
-        log_func = getattr(logger, level.lower(), logger.info)
-        log_func(f"[{event_type}] {message}")
+        try:
+            return self.db_client.get_trade_count_today()
+        except:
+            return 0
 
     # ========================================
     # CLEANUP

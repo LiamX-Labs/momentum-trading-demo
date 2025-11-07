@@ -24,9 +24,12 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p logs data/cache database alerts
 
-# Health check - simple process check since no web interface
+# Health check - check both main bot and fill monitor
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
     CMD pgrep -f trading_system.py || exit 1
 
-# Default command
-CMD ["python", "trading_system.py"]
+# Create startup script to run both services
+RUN echo '#!/bin/bash\npython fill_monitor_service.py &\npython trading_system.py' > /app/start.sh && chmod +x /app/start.sh
+
+# Default command - runs both bot and fill monitor
+CMD ["/app/start.sh"]

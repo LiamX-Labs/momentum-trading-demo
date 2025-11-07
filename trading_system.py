@@ -75,6 +75,11 @@ class TradingSystem:
         self.daily_trading_stopped = False
         self.system_halted = False
 
+        # Update initial equity in Alpha infrastructure
+        if hasattr(self, 'alpha_integration') and self.alpha_integration.is_connected():
+            self.alpha_integration.update_equity(self.capital)
+            print(f"✅ Equity updated: ${self.capital:,.2f}")
+
         # Tracking
         self.current_date = None
         self.current_week = None
@@ -518,6 +523,8 @@ class TradingSystem:
                     exit_reason=exit_reason,
                     holding_time_seconds=int(holding_time)
                 )
+                # Update equity after trade close
+                self.alpha_integration.update_equity(self.capital)
 
             # Send alert
             if self.telegram:
