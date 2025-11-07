@@ -77,23 +77,23 @@ class ExchangeConfig:
 @dataclass
 class RiskConfig:
     """Risk management configuration."""
-    # Position sizing
-    initial_capital: float = 10000
-    risk_per_trade_pct: float = 0.05  # 5% per trade
-    max_positions: int = 3
-    stop_loss_pct: float = 0.10  # 10% trailing stop
+    # Position sizing - DEMO VALUES - Configure based on your capital and risk tolerance
+    initial_capital: float = 10000  # Adjust to your account size
+    risk_per_trade_pct: float = 0.03  # Example: 3-5% per trade (backtest to optimize)
+    max_positions: int = 3  # Maximum concurrent positions
+    stop_loss_pct: float = 0.10  # Example trailing stop percentage
 
-    # Loss limits
-    daily_loss_limit_pct: float = 0.03  # -3% daily limit
-    weekly_loss_limit_pct: float = 0.08  # -8% weekly limit
-    monthly_loss_limit_pct: float = 0.15  # -15% monthly limit
+    # Loss limits - Configure based on your risk management strategy
+    daily_loss_limit_pct: float = 0.03  # Example: -3% daily limit
+    weekly_loss_limit_pct: float = 0.08  # Example: -8% weekly limit
+    monthly_loss_limit_pct: float = 0.15  # Example: -15% monthly limit
 
-    # Drawdown protection
-    max_drawdown_pct: float = 0.20  # Stop trading at -20% drawdown
+    # Drawdown protection - Test in demo mode first
+    max_drawdown_pct: float = 0.20  # Example: Stop at -20% drawdown
 
-    # Fees
-    commission_pct: float = 0.001  # 0.1% per trade
-    slippage_pct: float = 0.001  # 0.1% estimated slippage
+    # Fees - Adjust based on your exchange fee tier
+    commission_pct: float = 0.001  # Example: 0.1% per trade (varies by VIP level)
+    slippage_pct: float = 0.001  # Example: 0.1% estimated slippage
 
     def scale_for_live(self, live_capital: float):
         """Scale parameters for live trading."""
